@@ -149,7 +149,7 @@ async function token() {
   return session.access_token;
 }
 async function api(path, opt = {}) {
-  const r = await fetch(CFG.URL + "/rest/v1/" + path, { ...opt, headers: { apikey: CFG.KEY, Authorization: "Bearer " + await token(), "Content-Type": "application/json", ...(opt.headers || {}) } });
+  const r = await fetch(CFG.URL + "/rest/v1/" + path, { ...opt, headers: { apikey: CFG.KEY, ...(session ? { Authorization: "Bearer " + await token() } : {}), "Content-Type": "application/json", ...(opt.headers || {}) } });
   if (!r.ok) throw new Error(await r.text());
   return opt.method && opt.method !== "GET" ? null : r.json();
 }
@@ -318,4 +318,5 @@ load();
 setInterval(() => { if (!DEMO && !document.querySelector("dialog[open]")) load(); }, 30000);
 </script>
 </body>
-</html>
+  </html>
+  
