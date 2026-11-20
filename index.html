@@ -51,7 +51,7 @@ h2{font-size:22px;margin-bottom:16px}
 .m b{text-align:center;font-size:17px}
 .m small{background:#222226;border-radius:6px;padding:2px 8px;margin-left:8px;color:var(--mute)}
 .m time{text-align:right;color:var(--mute);font-size:13px}
-dialog{background:var(--panel);color:var(--text);border:1px solid var(--gold);border-radius:14px;padding:26px;width:400px}
+dialog{background:var(--panel);color:var(--text);border:1px solid var(--gold);border-radius:14px;padding:26px;width:min(400px,calc(100vw - 32px));margin:auto}
 dialog::backdrop{background:#000a}
 dialog label{display:block;margin:14px 0 6px;color:var(--mute);font-size:13px}
 dialog input,dialog select{width:100%;padding:10px;background:#0c0c0e;color:var(--text);border:1px solid var(--line);border-radius:8px;font:inherit}
@@ -125,6 +125,7 @@ const CFG = window.CHESS_CONFIG || { URL: "", KEY: "" };
 // ===========================================================================
 
 const $ = id => document.getElementById(id);
+window.addEventListener("error", e => { const b = document.getElementById("err"); b.hidden = false; b.textContent = "Ошибка скрипта: " + e.message; });
 const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const DEMO = !CFG.URL || !CFG.KEY || CFG.KEY.startsWith("ВСТАВЬ");
 let players = [], matches = [], isAdmin = false, fresh = false;
@@ -302,6 +303,7 @@ $("aok").onclick = async () => {
   const fail = t => { $("ae").textContent = t; $("ae").hidden = false; };
   if (!/^[\p{L}\p{N}_]{3,14}$/u.test(nick)) return fail("Ник: 3–14 символов, только буквы, цифры и _");
   if (pass.length < 6) return fail("Пароль минимум 6 символов");
+  $("aok").disabled = true; $("aok").textContent = "Подождите…";
   try {
     if (mode === "reg") {
       const j = await auth("signup", { email: mail(nick), password: pass, data: { nick, avatar: $("aa").value.trim() || "♟" } });
@@ -310,6 +312,7 @@ $("aok").onclick = async () => {
     } else save(toSession(await auth("token?grant_type=password", { email: mail(nick), password: pass })));
     $("ap").value = ""; $("da").close(); load();
   } catch (e) { fail(e.message); }
+  $("aok").disabled = false; $("aok").textContent = mode === "login" ? "Войти" : "Создать аккаунт";
 };
 
 document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => b.closest("dialog").close());
@@ -319,11 +322,4 @@ $("addM").onclick = () => {
   if (!p) return alert("Тебя нет в списке участников. Обратись к админу.");
   if (isAdmin) $("mw").dataset.free = "1";
   if (players.length < 2) return alert("Нужен минимум ещё один игрок");
-  const opts = players.map(x => `<option value="${x.id}">${esc(x.name)} (${x.elo})</option>`).join("");
-  $("mw").innerHTML = opts; $("mb").innerHTML = opts;
-  $("mw").value = p.id; $("mb").value = (players.find(x => x.id !== p.id) || {}).id;
-  $("dm").showModal();
-};
-$("saveM").onclick = async () => {
-  const w = +$("mw").value, b = +$("mb").value, result = $("mr").value, p = me();
-  if (w === b) return alert("Выбе
+  const opts = players.map(x => `<option value="${x.id}">${esc(x.n
