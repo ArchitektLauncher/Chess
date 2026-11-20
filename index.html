@@ -8,6 +8,7 @@
 <style>
 :root{--bg:#0c0c0e;--panel:#141416;--line:#26262a;--gold:#c9a24a;--gold2:#e6c57a;--text:#ece8df;--mute:#8d8a82;--red:#d9604c}
 *{box-sizing:border-box;margin:0}
+[hidden]{display:none!important}
 body{background:var(--bg);color:var(--text);font:15px/1.4 Inter,Arial,sans-serif;display:flex;min-height:100vh}
 h1,h2,.brand{font-family:"Playfair Display",Georgia,serif;font-weight:600}
 aside{width:272px;flex:none;background:#101012;border-right:1px solid var(--line);padding:36px 24px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
@@ -22,9 +23,10 @@ h1{font-size:38px}
 h1 span{color:var(--gold);margin-right:14px}
 .btn{background:none;border:1px solid var(--gold);color:var(--gold2);padding:11px 20px;border-radius:10px;font:600 14px Inter,sans-serif;cursor:pointer;margin-left:8px}
 .btn:hover,.btn.fill{background:var(--gold);color:#17130a}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;margin-bottom:24px;overflow:hidden}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;margin-bottom:24px;overflow-x:auto}
 table{width:100%;border-collapse:collapse}
 th{color:var(--mute);font-weight:500;padding:18px 10px;text-align:center}
+td,th{white-space:nowrap}
 td{padding:14px 10px;text-align:center;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
 th:nth-child(2),td:nth-child(2){text-align:left}
 tr.lead td{background:#2a2312;border-top:1px solid var(--gold)}
@@ -77,7 +79,7 @@ dialog input,dialog select{width:100%;padding:10px;background:#0c0c0e;color:var(
     <h1><span>🏆</span>Турнирная таблица</h1>
     <div style="display:flex;align-items:center"><span id="who" style="color:var(--gold2)" hidden></span><button class="btn" id="bOut" hidden>Выйти</button><button class="btn" id="bLogin">Войти</button><button class="btn" id="bReg">Регистрация</button><button class="btn fill" id="addM" hidden>+ Добавить матч</button></div>
   </header>
-  <div id="demo" class="note" hidden>Демо-режим: данные не сохраняются. Вставь URL и ключ Supabase в CONFIG, чтобы работали регистрация и общие данные.</div>
+  <div id="demo" class="note" hidden>Демо-режим: данные не сохраняются. Не найден config.js с URL и ключом Supabase. Создай его в репозитории рядом с index.html.</div>
   <div id="err" class="note" style="border-color:var(--red);color:var(--red)" hidden></div>
 
   <div class="panel"><table id="tbl"></table></div>
@@ -116,15 +118,16 @@ dialog input,dialog select{width:100%;padding:10px;background:#0c0c0e;color:var(
   <div class="acts"><button class="btn" data-close>Отмена</button><button class="btn fill" id="aok">Войти</button></div>
 </dialog>
 
+<script src="config.js"></script>
 <script>
 // ===== CONFIG: вставь свои данные из Supabase (Project Settings → API) =====
-const CFG = { URL: "https://ghjqksqylggmvaumifac.supabase.co", KEY: "sb_publishable_Mh8ZgEf1TO_OmIo0cx3Ggw_c2hKlTmG" };
+const CFG = window.CHESS_CONFIG || { URL: "", KEY: "" };
 // ===========================================================================
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const DEMO = !CFG.URL;
-let players = [], matches = [], isAdmin = false;
+const DEMO = !CFG.URL || !CFG.KEY || CFG.KEY.startsWith("ВСТАВЬ");
+let players = [], matches = [], isAdmin = false, fresh = false;
 let session = JSON.parse(localStorage.getItem("ct_s") || "null");
 const save = s => { session = s; s ? localStorage.setItem("ct_s", JSON.stringify(s)) : localStorage.removeItem("ct_s"); };
 const mail = n => [...new TextEncoder().encode(n.toLowerCase())].map(b => b.toString(16).padStart(2, "0")).join("") + "@chess-tournament.app";
@@ -165,7 +168,8 @@ async function load() {
       }
     } else {
       [players, matches] = await Promise.all([api("players?select=*&order=id"), api("matches?select=*&order=created_at.desc")]);
-      if (session && !me()) {
+      if (session && !me() && fresh) {
+        fresh = false;
         const md = session.user.user_metadata || {};
         await api("players", { method: "POST", body: JSON.stringify({ name: md.nick, avatar: md.avatar || "♟" }), headers: { Prefer: "return=minimal" } });
         players = await api("players?select=*&order=id");
@@ -186,15 +190,25 @@ function renderAdmin() {
   if (!isAdmin) return;
   const byId = Object.fromEntries(players.map(p => [p.id, p]));
   const fmt = t => new Date(t).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
-  $("admin").innerHTML = "<h2>Админка</h2><div class='card'><div style='color:var(--mute);margin-bottom:6px'>Игроки</div>" +
-    players.map(p => `<div class="ar"><span class="av">${esc(p.avatar || "♟")}</span><b>${esc(p.name)}</b><input type="number" value="${p.elo}" data-elo="${p.id}"><button class="btn" data-save="${p.id}">Сохранить Эло</button>${session && p.user_id === session.user.id ? "" : `<button class="btn" data-delp="${p.id}">Удалить</button>`}</div>`).join("") +
+  $("admin").innerHTML = "<h2>Админка</h2><div class='card' style='margin-bottom:16px'><div style='color:var(--mute);margin-bottom:6px'>Добавить участника</div><div class='ar'><input id='xn' placeholder='Ник' maxlength='14' style='width:170px'><input id='xe' type='number' value='1500'><input id='xa' value='♟' maxlength='4' style='width:60px'><button class='btn fill' data-addp='1'>Добавить</button></div></div><div class='card'><div style='color:var(--mute);margin-bottom:6px'>Игроки</div>" +
+    players.map(p => `<div class="ar"><span class="av">${esc(p.avatar || "♟")}</span><input style="flex:1;width:auto;min-width:110px" value="${esc(p.name)}" maxlength="14" data-name="${p.id}"><input type="number" value="${p.elo}" data-elo="${p.id}"><button class="btn" data-save="${p.id}">Сохранить</button>${session && p.user_id === session.user.id ? "" : `<button class="btn" data-delp="${p.id}">Удалить</button>`}</div>`).join("") +
     "</div><div class='card' style='margin-top:16px'><div style='color:var(--mute);margin-bottom:6px'>Все матчи</div>" +
     (matches.length ? matches.map(m => `<div class="ar"><b>${esc((byId[m.white_id] || {}).name || "?")} — ${esc((byId[m.black_id] || {}).name || "?")}</b><span>${m.result === "1/2" ? "½-½" : m.result}</span><time>${fmt(m.created_at)}</time><button class="btn" data-delm="${m.id}">Удалить</button></div>`).join("") : "<div class='empty'>Матчей нет</div>") + "</div>";
 }
 $("admin").onclick = async e => {
   const d = e.target.dataset;
   try {
-    if (d.save) await api("players?id=eq." + d.save, { method: "PATCH", body: JSON.stringify({ elo: +$("admin").querySelector(`[data-elo="${d.save}"]`).value || 1500 }), headers: PH });
+    if (d.save) {
+      const q = k => $("admin").querySelector(`[data-${k}="${d.save}"]`).value;
+      const name = q("name").trim();
+      if (name.length < 3 || name.length > 14) return alert("Ник: от 3 до 14 символов");
+      await api("players?id=eq." + d.save, { method: "PATCH", body: JSON.stringify({ name, elo: +q("elo") || 1500 }), headers: PH });
+    }
+    else if (d.addp) {
+      const name = $("xn").value.trim();
+      if (name.length < 3 || name.length > 14) return alert("Ник: от 3 до 14 символов");
+      await api("players", { method: "POST", body: JSON.stringify({ name, elo: +$("xe").value || 1500, avatar: $("xa").value.trim() || "♟", user_id: null }), headers: PH });
+    }
     else if (d.delp) { if (!confirm("Удалить игрока и все его матчи?")) return; await api("players?id=eq." + d.delp, { method: "DELETE", headers: PH }); }
     else if (d.delm) { if (!confirm("Удалить матч?")) return; await api("matches?id=eq." + d.delm, { method: "DELETE", headers: PH }); }
     else return;
@@ -265,7 +279,7 @@ function render() {
 
 let mode = "login";
 function openAuth(m) {
-  if (DEMO) return alert("Сначала вставь URL и ключ Supabase в CONFIG");
+  if (DEMO) return alert("Сначала создай config.js с URL и ключом Supabase");
   mode = m;
   $("at").textContent = m === "login" ? "Вход" : "Регистрация";
   $("aok").textContent = m === "login" ? "Войти" : "Создать аккаунт";
@@ -286,7 +300,7 @@ $("aok").onclick = async () => {
     if (mode === "reg") {
       const j = await auth("signup", { email: mail(nick), password: pass, data: { nick, avatar: $("aa").value.trim() || "♟" } });
       if (!j.access_token) return fail("В Supabase включено подтверждение почты: выключи Confirm email");
-      save(toSession(j));
+      save(toSession(j)); fresh = true;
     } else save(toSession(await auth("token?grant_type=password", { email: mail(nick), password: pass })));
     $("ap").value = ""; $("da").close(); load();
   } catch (e) { fail(e.message); }
@@ -296,7 +310,7 @@ document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => b.close
 
 $("addM").onclick = () => {
   const p = me();
-  if (!p) return alert("Профиль ещё загружается, попробуй через секунду");
+  if (!p) return alert("Тебя нет в списке участников. Обратись к админу.");
   if (isAdmin) $("mw").dataset.free = "1";
   if (players.length < 2) return alert("Нужен минимум ещё один игрок");
   const opts = players.map(x => `<option value="${x.id}">${esc(x.name)} (${x.elo})</option>`).join("");
@@ -311,12 +325,4 @@ $("saveM").onclick = async () => {
   try {
     await api("matches", { method: "POST", body: JSON.stringify({ white_id: w, black_id: b, result }), headers: { Prefer: "return=minimal" } });
     $("dm").close(); load();
-  } catch (e) { alert("Ошибка: " + e.message); }
-};
-
-load();
-setInterval(() => { if (!DEMO && !document.querySelector("dialog[open]")) load(); }, 30000);
-</script>
-</body>
-  </html>
-  
+  } catch (e) { 
