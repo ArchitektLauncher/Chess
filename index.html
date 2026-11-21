@@ -24,7 +24,6 @@
             min-height: 100vh;
         }
 
-        /* --- Sidebar --- */
         .sidebar {
             width: 250px;
             background-color: var(--bg-panel);
@@ -51,7 +50,6 @@
         .nav-item:hover, .nav-item.active { background-color: #2a2a2a; color: var(--gold); }
         .nav-item.active { background-color: rgba(212, 175, 55, 0.1); border-left: 3px solid var(--gold); }
 
-        /* --- Main Content --- */
         .main-content {
             flex: 1;
             padding: 30px;
@@ -81,7 +79,6 @@
         .btn-filled { background-color: var(--gold); color: #000; }
         .btn-filled:hover { background-color: var(--gold-hover); }
 
-        /* --- Table --- */
         .table-container {
             background-color: var(--bg-panel);
             border-radius: 10px;
@@ -101,7 +98,6 @@
         
         .score { font-weight: bold; color: var(--gold); }
 
-        /* --- Stats --- */
         .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px; }
         .stat-card {
             background-color: var(--bg-panel);
@@ -112,7 +108,6 @@
         .stat-card h3 { color: var(--text-muted); font-size: 14px; margin-bottom: 10px; }
         .stat-value { font-size: 24px; font-weight: bold; }
 
-        /* --- Modal (Admin Panel) --- */
         .modal {
             display: none;
             position: fixed;
@@ -146,14 +141,14 @@
         .modal-buttons { display: flex; gap: 10px; margin-top: 20px; }
         .modal-buttons button { flex: 1; }
 
-        /* --- Auth screen (Hidden by default) --- */
         #adminPanel { display: none; }
         .login-error { color: red; font-size: 14px; margin-top: 10px; display: none; }
+        
+        .loading { text-align: center; padding: 20px; color: var(--gold); }
     </style>
 </head>
 <body>
 
-    <!-- SIDEBAR -->
     <div class="sidebar">
         <div class="logo">
             <div style="font-size: 40px; color: var(--gold);">♛</div>
@@ -164,10 +159,8 @@
         <div class="nav-item" onclick="showTab('admin')">⚙️ Админ-панель</div>
     </div>
 
-    <!-- MAIN CONTENT -->
     <div class="main-content">
         
-        <!-- LEADERBOARD TAB -->
         <div id="leaderboardTab">
             <div class="header">
                 <h2>🏆 Турнирная таблица</h2>
@@ -186,7 +179,7 @@
                         </tr>
                     </thead>
                     <tbody id="leaderboardBody">
-                        <!-- Данные вставляются через JS -->
+                        <tr><td colspan="5" class="loading">Загрузка данных из облака...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -208,7 +201,6 @@
             </div>
         </div>
 
-        <!-- MATCHES TAB -->
         <div id="matchesTab" style="display: none;">
             <div class="header">
                 <h2>⚔️ Последние матчи</h2>
@@ -224,13 +216,12 @@
                         </tr>
                     </thead>
                     <tbody id="matchesBody">
-                        <!-- Данные вставляются через JS -->
+                        <tr><td colspan="4" class="loading">Загрузка...</td></tr>
                     </tbody>
                 </table>
             </div>
         </div>
 
-        <!-- ADMIN TAB -->
         <div id="adminTab" style="display: none;">
             <div class="header">
                 <h2>⚙️ Админ-панель</h2>
@@ -272,7 +263,6 @@
 
     </div>
 
-    <!-- MODAL FOR ADDING MATCH -->
     <div class="modal" id="addMatchModal">
         <div class="modal-content">
             <h3>Добавить результат матча</h3>
@@ -299,26 +289,33 @@
         </div>
     </div>
 
-    <script>
-        // --- БАЗА ДАННЫХ (LocalStorage) ---
-        let players = JSON.parse(localStorage.getItem('chess_players')) || [
-            { id: 1, name: 'ChessMaster', elo: 2450 },
-            { id: 2, name: 'GrandMasterX', elo: 2420 },
-            { id: 3, name: 'FisherCat', elo: 2380 },
-            { id: 4, name: 'PixelChess', elo: 2350 },
-            { id: 5, name: 'AnonPlayer', elo: 2300 }
-        ];
-        
-        let matches = JSON.parse(localStorage.getItem('chess_matches')) || [
-            { id: 1, p1: 1, p2: 2, result: '1-0', date: '17.11.2026, 21:45' },
-            { id: 2, p1: 2, p2: 3, result: '0.5-0.5', date: '17.11.2026, 21:20' },
-            { id: 3, p1: 1, p2: 4, result: '1-0', date: '17.11.2026, 20:50' }
-        ];
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-        function saveData() {
-            localStorage.setItem('chess_players', JSON.stringify(players));
-            localStorage.setItem('chess_matches', JSON.stringify(matches));
-            render();
+    <script>
+        // --- ВАШИ КЛЮЧИ SUPABASE ---
+        const supabaseUrl = "https://jcemojvfxnbhbdmdkqlj.supabase.co";
+        const supabaseKey = "sb_publishable_pctyrv0uZXtT5saVwp09JA_oCWzqkZv";
+        const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
+
+        let players = [];
+        let matches = [];
+
+        // --- ЗАГРУЗКА ДАННЫХ ---
+        async function loadData() {
+            try {
+                const { data: playersData, error: pError } = await supabaseClient.from('players').select('*');
+                if (pError) throw pError;
+                players = playersData || [];
+
+                const { data: matchesData, error: mError } = await supabaseClient.from('matches').select('*').order('created_at', { ascending: false });
+                if (mError) throw mError;
+                matches = matchesData || [];
+
+                render();
+            } catch (error) {
+                console.error("Ошибка загрузки:", error);
+                alert("Ошибка подключения к базе данных. Проверьте таблицы в Supabase.");
+            }
         }
 
         // --- ЛОГИКА ПОДСЧЕТА ---
@@ -330,10 +327,9 @@
             let playerMap = {};
             standings.forEach((p, index) => { playerMap[p.id] = index; });
 
-            // Подсчет очков
             matches.forEach(match => {
-                let p1Idx = playerMap[match.p1];
-                let p2Idx = playerMap[match.p2];
+                let p1Idx = playerMap[match.player1_id];
+                let p2Idx = playerMap[match.player2_id];
                 
                 if (p1Idx !== undefined && p2Idx !== undefined) {
                     standings[p1Idx].opponents.push(p2Idx);
@@ -348,7 +344,6 @@
                 }
             });
 
-            // Подсчет Бухгольца
             standings.forEach(player => {
                 let buch = 0;
                 player.opponents.forEach(oppIdx => {
@@ -357,7 +352,6 @@
                 player.buchholz = buch;
             });
 
-            // Сортировка: сначала по очкам, потом по Бухгольцу
             standings.sort((a, b) => b.points - a.points || b.buchholz - a.buchholz);
             return standings;
         }
@@ -368,13 +362,17 @@
             const tbody = document.getElementById('leaderboardBody');
             tbody.innerHTML = '';
 
+            if (standings.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Нет игроков. Добавьте их в админ-панели.</td></tr>';
+            }
+
             standings.forEach((p, index) => {
                 let tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${index + 1}</td>
                     <td>
                         <div class="player-cell">
-                            <div class="avatar">${p.name.charAt(0)}</div>
+                            <div class="avatar">${p.name.charAt(0).toUpperCase()}</div>
                             ${p.name}
                         </div>
                     </td>
@@ -385,35 +383,38 @@
                 tbody.appendChild(tr);
             });
 
-            // Статистика
             document.getElementById('totalMatches').innerText = matches.length;
             document.getElementById('totalGames').innerText = matches.length;
             if(standings.length > 0) {
                 document.getElementById('bestPlayer').innerText = standings[0].name;
+            } else {
+                document.getElementById('bestPlayer').innerText = '-';
             }
 
-            // Список матчей
             const matchBody = document.getElementById('matchesBody');
             matchBody.innerHTML = '';
-            matches.slice().reverse().forEach(m => {
-                let p1 = players.find(p => p.id === m.p1);
-                let p2 = players.find(p => p.id === m.p2);
+            if (matches.length === 0) {
+                matchBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Матчей пока нет.</td></tr>';
+            }
+
+            matches.forEach(m => {
+                let p1 = players.find(p => p.id === m.player1_id);
+                let p2 = players.find(p => p.id === m.player2_id);
                 if(p1 && p2) {
+                    let date = new Date(m.created_at).toLocaleString('ru-RU');
                     let tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td>${p1.name}</td>
                         <td class="score">${m.result.replace('-', ' - ')}</td>
                         <td>${p2.name}</td>
-                        <td>${m.date}</td>
+                        <td>${date}</td>
                     `;
                     matchBody.appendChild(tr);
                 }
             });
 
-            // Обновление списков в модалке
             updateSelects();
             
-            // Обновление списка в админке
             const adminList = document.getElementById('adminPlayerList');
             adminList.innerHTML = '';
             players.forEach(p => {
@@ -467,7 +468,7 @@
             document.getElementById('addMatchModal').style.display = 'none';
         }
 
-        function saveMatch() {
+        async function saveMatch() {
             const p1 = parseInt(document.getElementById('matchPlayer1').value);
             const p2 = parseInt(document.getElementById('matchPlayer2').value);
             const res = document.getElementById('matchResult').value;
@@ -477,20 +478,17 @@
                 return;
             }
 
-            const now = new Date();
-            const dateStr = `${now.getDate().toString().padStart(2, '0')}.${(now.getMonth()+1).toString().padStart(2, '0')}.${now.getFullYear()}, ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+            const { error } = await supabaseClient
+                .from('matches')
+                .insert([{ player1_id: p1, player2_id: p2, result: res }]);
 
-            matches.push({
-                id: Date.now(),
-                p1: p1,
-                p2: p2,
-                result: res,
-                date: dateStr
-            });
-
-            saveData();
-            closeModal();
-            showTab('leaderboard');
+            if (error) {
+                alert("Ошибка сохранения: " + error.message);
+            } else {
+                closeModal();
+                loadData();
+                showTab('leaderboard');
+            }
         }
 
         // --- АДМИНКА ---
@@ -498,13 +496,8 @@
             const user = document.getElementById('adminUser').value;
             const pass = document.getElementById('adminPass').value;
 
-            // Логин: admin, Пароль: 1234
             if (user === 'admin' && pass === '1234') {
                 document.getElementById('adminLogin').style.display = 'none';
                 document.getElementById('adminPanel').style.display = 'block';
             } else {
-                document.getElementById('loginError').style.display = 'block';
-            }
-        }
-
-        functi
+                document.getElementById('loginError').style.display = 
